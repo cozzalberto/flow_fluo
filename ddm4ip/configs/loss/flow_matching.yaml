@@ -1,3 +1,5 @@
 name: "flow_matching"
 crop_patch_sizes: null
 n_accum_steps: 1
+scaling_info_pth: "/leonardo_work/IscrC_GOLD-FM_0/cozzani/flow_fluo/datasets/psfs/scaling_info.pt"
+

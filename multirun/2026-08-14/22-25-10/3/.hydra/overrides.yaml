@@ -1,0 +1,4 @@
+- exp=step2_argolight_cropped
+- loss.lambda1=0.05
+- loss.lambda2=20
+- training.max_steps=128000

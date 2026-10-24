@@ -230,5 +230,14 @@ def init_dataset(cfg: DictConfig, split: Datasplit, is_paired: bool):
             dset_cfg=dset_cfg,
             split=split,
         )
+    elif dset_name == 'volume':
+        from .volume_dataset import VolumeDataset
+        return VolumeDataset(
+            data_path,
+            degradation=perturbation,
+            shuffle_clean=shuffle_clean,
+            dset_cfg=dset_cfg,
+            split=split,  
+        )
     else:
         raise ValueError(dset_name)

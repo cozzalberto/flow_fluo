@@ -4,7 +4,6 @@ import copy
 from enum import Enum
 import os
 import time
-
 import dill as pickle
 import re
 from typing import Any, Dict, Mapping, MutableMapping, Optional, TypeAlias
@@ -33,7 +32,7 @@ from ddm4ip.utils.distributed import (
     barrier,
 )
 from .train_utils import Timer, get_next_batch
-
+import numpy as np
 
 TYPE_CFG = DictConfig
 TYPE_DSETS = Mapping[Datasplit, DatasetType | None]
@@ -61,9 +60,13 @@ class AbstractTrainer(abc.ABC):
     @abc.abstractmethod
     def init_models(self, cfg: TYPE_CFG, dsets: TYPE_DSETS, device) -> TYPE_MODELS:
         pass
-
+        
     @abc.abstractmethod
-    def init_loss(self, cfg: TYPE_CFG, models: TYPE_MODELS) -> TYPE_LOSS:
+    def init_x_and_b(self, batch, device):
+        pass
+        
+    @abc.abstractmethod
+    def init_loss(self, cfg: TYPE_CFG, models: TYPE_MODELS, x= None, b = None) -> TYPE_LOSS:
         pass
 
     @abc.abstractmethod
@@ -160,8 +163,8 @@ class BaseTrainer(AbstractTrainer, abc.ABC):
         os.makedirs(self.run_dir, exist_ok=True)
         os.makedirs(self.ckpt_dir, exist_ok=True)
         os.makedirs(self.eval_dir, exist_ok=True)
-
-        self.device = torch.device("cuda", get_local_rank())
+        local_rank = get_local_rank() if torch.cuda.is_available() else 0
+        self.device = torch.device("cuda", local_rank) if torch.cuda.is_available() else torch.device("cpu")
         self.seed = cfg['training']['seed']
         set_random_seed(self.seed, get_rank())
 
@@ -339,14 +342,14 @@ class BaseTrainer(AbstractTrainer, abc.ABC):
                 fn = os.path.join(self.eval_dir, f"{name.replace('/', '_')}-{gs}.png")
                 if img.dtype == torch.float32:
                     img = (img * 255).to(dtype=torch.uint8)
-                torchvision.io.write_png(img, fn, 9)
+                torchvision.io.write_png(img.detach().cpu(), fn, 9)
         else:
             assert isinstance(img, matplotlib.figure.Figure)
             if tb is not None:
                 tb.add_figure(name, img, global_step=gs, close=not self.save_eval_to_file)
             if self.save_eval_to_file:
                 fn = os.path.join(self.eval_dir, f"{name.replace('/', '_')}-{gs}.png")
-                img.savefig(fn, dpi=120, bbox_inches='tight')
+                img.savefig(fn, dpi=120, bbox_inches='tight') 
                 plt.close(img)
 
     def collect_stats(
@@ -374,7 +377,7 @@ class BaseTrainer(AbstractTrainer, abc.ABC):
             else:
                 stats_strings.append(f"{key_prefix}{k} {value:{fmt_str}}")
         print0(f"[{time.strftime('%d/%m %H:%M:%S', time.localtime())}][{self.global_step:7d}] {' | '.join(stats_strings)}")
-
+#plot
     def evaluate(self, cfg):
         self.is_training = False
         self.cfg = cfg
@@ -405,6 +408,7 @@ class BaseTrainer(AbstractTrainer, abc.ABC):
         valid_timer = Timer()
         self.global_step = 0
         while True:
+
             if self.should_report_at_step(self.global_step):  # Report statistics to tensorboard and print
                 training_stats.report(KEYS.TIME_MAINT.value, valid_timer.cuda_time())
                 training_stats.report(KEYS.MEM_CPU.value, psutil.Process(os.getpid()).memory_info().rss / 2**30)
@@ -463,17 +467,9 @@ class BaseTrainer(AbstractTrainer, abc.ABC):
             raise KeyError("'train' dataset was not found, but it is mandatory.")
 
         self.models = self.init_models(cfg, self.dsets, self.device)
-
-        self.loss_optim = self.init_loss(cfg, self.models)
         tb = SummaryWriter(log_dir=self.run_dir)
         self.tb_writer = tb
 
-        self.start_global_step = self.maybe_load_checkpoint()
-        if self.start_global_step >= self.max_steps + 1:
-            raise ValueError(
-                f"Given a starting step {self.start_global_step} "
-                f"higher than the max number of steps {self.max_steps + 1}"
-            )
 
         self.dloaders = self.init_dataloaders(cfg, self.dsets)
         if self.dloaders.get(Datasplit.TRAIN, None) is None:
@@ -486,15 +482,25 @@ class BaseTrainer(AbstractTrainer, abc.ABC):
         val_loader_iter = None
         if val_dloader is not None:
             val_loader_iter = iter(val_dloader)
-
+        first_batch = next(tr_loader_iter)
+        x, b = None, None
+        x, b = self.init_x_and_b(first_batch, self.device) # aggiungerlo a init_loss?
+        tr_loader_iter = iter(tr_dloader)
         loss_timer = Timer()
         data_timer = Timer()
         valid_timer = Timer()
         eval_timer = Timer(cpu_only=True)
         save_timer = Timer(cpu_only=True)
-
         torch.set_anomaly_enabled(False)
+        self.loss_optim = self.init_loss(cfg, self.models, x, b)
+        self.start_global_step = self.maybe_load_checkpoint()
+        if self.start_global_step >= self.max_steps + 1:
+            raise ValueError(
+                f"Given a starting step {self.start_global_step} "
+                f"higher than the max number of steps {self.max_steps + 1}"
+            )
         self.global_step = self.start_global_step
+
         while True:
             for k, v in self.models.items():
                 v.eval()
@@ -530,6 +536,17 @@ class BaseTrainer(AbstractTrainer, abc.ABC):
             if self.global_step >= self.max_steps:
                 print0(f"Training finished at step {self.global_step}")
                 break
+        outdir = cfg["exp_name"]
+        if x is not None:
+            pred_x = self.loss_optim.x[0]
+            x_np = pred_x.detach().cpu().squeeze().numpy()
+            pred_b = self.loss_optim.b[0]
+            b_np = pred_b.detach().cpu().squeeze().numpy()
+            plt.imsave(f"experiments/{outdir}/prediction_x.png", x_np, cmap ='viridis')
+            plt.imsave(f"experiments/{outdir}/prediction_b.png",b_np, cmap='viridis')
+            np.save(f"experiments/{outdir}/pred_x.npy", x_np)
+            np.save(f"experiments/{outdir}/pred_b.npy", b_np)
+
 
     def on_train_step_finished(self):
         pass

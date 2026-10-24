@@ -62,7 +62,10 @@ class GetAllPatchesTransform(v2.Transform):
     def _get_params(self, flat_inputs: List[Any]) -> Dict[str, Any]:
         return {}
 
-    def _transform(self, inpt: Any, params: Dict[str, Any]) -> Any:
+    def transform(self, inpt: Any, params: Dict[str, Any]) -> Any:
+        from torchvision import tv_tensors
+        if isinstance(inpt, tv_tensors.Image):
+            inpt = inpt.as_subclass(torch.Tensor)
         # patches: H-blocks, W-blocks, Channels, H, W
         patches = extract_patches(inpt, self.patch_size, stride=self.stride)
         # merge the first two dimensions to get standard B,C,H,W
@@ -79,7 +82,8 @@ class TopLeftCrop(v2.Transform):
 
     def _transform(self, inpt: Any, params: Dict[str, Any]) -> Any:
         return v2.functional.crop(inpt, top=0, left=0, height=self.patch_size, width=self.patch_size)
-
+    def transform(self, inpt: Any, params: Dict[str, Any]) -> Any:
+        return self._transform(inpt, params)
 
 def get_locmap(height, width):
     map_w = torch.linspace(0, 1, width, dtype=torch.float32)
@@ -102,7 +106,8 @@ class AddLocMapTransform(v2.Transform):
         assert inpt.dtype == torch.float32
         locmap = get_locmap(height, width)
         return torch.cat([inpt, locmap], dim=-3)
-
+    def transform(self, inpt: Any, params: Dict[str, Any]) -> Any:
+        return self._transform(inpt, params)
 
 class ReplaceRandomLocMapTransform(v2.Transform):
     def __init__(self, p: float, full_img_size: tuple[int, int]):
@@ -126,7 +131,8 @@ class ReplaceRandomLocMapTransform(v2.Transform):
         if inpt.dim() == 4:
             sub_map = sub_map.expand(inpt.shape[0], *sub_map.shape)
         return torch.cat([inpt, sub_map], dim=-3)
-
+    def transform(self, inpt: Any, params: Dict[str, Any]) -> Any:
+        return self._transform(inpt, params)
 
 class AddRandomLocMapTransform(v2.Transform):
     def __init__(self, full_img_size: tuple[int, int]):
@@ -145,7 +151,8 @@ class AddRandomLocMapTransform(v2.Transform):
         if inpt.dim() == 4:
             sub_map = sub_map.expand(inpt.shape[0], *sub_map.shape)
         return torch.cat([inpt, sub_map], dim=-3)
-
+    def transform(self, inpt: Any, params: Dict[str, Any]) -> Any:
+        return self._transform(inpt, params)
 
 class SeededTransform(v2.Transform):
     """A transform which uses the same random numbers
@@ -172,7 +179,8 @@ class SeededTransform(v2.Transform):
         finally:
             torch.default_generator.set_state(orig_state)
             self.num_called += 1
-
+    def transform(self, inpt: Any, params: Dict[str, Any]) -> Any:
+        return self._transform(inpt, params)
 
 def get_space_varying_patches(img_size: int | tuple[int, int], patch_size: int) -> torch.Tensor:
     if isinstance(img_size, int):

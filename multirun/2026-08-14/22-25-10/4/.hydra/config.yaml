@@ -1,0 +1,78 @@
+dataset:
+  degradation:
+    kind: none
+    padding: valid
+  noise:
+    kind: none
+  name: zip
+  train_path: /data/cil/alberto/flow_fluo_sc/datasets/corrupt.zip
+  test_path: datasets/corrupt.zip
+  M: 27.25
+  in_channels: 1
+  cuda: true
+  space_conditioning: false
+training:
+  seed: 42
+  log_dir: ${paths.out_path}
+  max_val_batches: 1
+  save_eval_to_file: false
+  save_first_step: false
+  batch_size: 32
+  max_steps: 128000
+  report_every_steps: 12800
+  plot_every_steps: 12800
+  save_every_steps: 25600
+  checkpoint: null
+  num_workers: 4
+  train: true
+generation:
+  num_steps: 32
+paths:
+  data: ./data
+  out_path: ./experiments
+models:
+  pretrained_flow:
+    kind: flow
+    channels: 32
+    channel_mult:
+    - 1
+    - 2
+    - 3
+    - 4
+    num_blocks: 1
+    attn_resolutions:
+    - 32
+    dropout: 0.2
+    channels_per_head: 16
+    path: /data/cil/alberto/flow_fluo_sc/experiments/step1_argolight_alpha12_true2/checkpoints/training-state-57600.pt
+  kernel:
+    type: direct
+    kernel_size: 13
+    padding: replicate
+    sum_to_one: true
+    factor: 1
+    learn_output_noise: false
+loss:
+  aux:
+    name: flow_matching
+    crop_patch_sizes: null
+    n_accum_steps: 1
+    scaling_info_pth: /leonardo_work/IscrC_GOLD-FM_0/cozzani/flow_fluo/datasets/psfs/scaling_info.pt
+  name: di
+  n_inner_steps: 1
+  n_accum_steps: 1
+  sparse_reg: 0.0
+  center_reg: 0.0
+  sum_to_one_reg: 0.0
+  kernel_path: ''
+  noise_level: 1
+  lambda1: 0.05
+  lambda2: 40
+  scaling_info_pth: ''
+optim:
+  aux:
+    lr: 1.0e-05
+  kernel:
+    lr: 0.0004
+noise_level: 1
+exp_name: lambda1_${loss.lambda1}_lambda2_${loss.lambda2}

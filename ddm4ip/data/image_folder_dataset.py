@@ -23,6 +23,11 @@ from .base import Batch, DatasetType, Datasplit
 
 T = TypeVar('T')
 
+class DivideBy:
+    def __init__(self, value):
+        self.value = value
+    def __call__(self, x):
+        return x / self.value
 
 class AbstractImagePath(Generic[T], abc.ABC):
     @abc.abstractmethod
@@ -79,7 +84,7 @@ class ImagePath(AbstractImagePath['ImagePath']):
     @override
     def load_raw_img(self) -> torch.Tensor:
         # return: tensor, CHW, RGB, [0,255] (uint8)
-        return torchvision.io.read_image(str((self.root / self.name).resolve()), mode=torchvision.io.ImageReadMode.RGB)
+        return torchvision.io.read_image(str((self.root / self.name).resolve()), mode=torchvision.io.ImageReadMode.GRAY)
 
     @override
     def is_labels_path(self) -> bool:
@@ -310,10 +315,11 @@ class ZipFileDataset(torch.utils.data.Dataset[Batch], DatasetType):
         self.x_flip = dset_cfg.get("x_flip", False) and self.split == Datasplit.TRAIN
         self.noisy_path = dset_cfg.get("noisy_path", None)
         self.space_conditioning = dset_cfg.get("space_conditioning", False)
-
+        self.M = dset_cfg.get("M", False)
         img_transform = [
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
+            DivideBy(self.M),
         ]
         if self.space_conditioning:
             img_transform.append(AddLocMapTransform())

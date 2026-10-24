@@ -1,0 +1,34 @@
+# @package _global_
+defaults:
+ - /models@models.flow: xxxs_flow_256 # O la grandezza che preferisci in base alla risoluzione
+ - override /training: default
+ - override /loss: flow_matching
+ - override /dataset: argolight_cropped  # <--- RICHIAMA IL TUO DATASET SPORCO
+ - override /generation: flow
+
+models:
+  flow:
+    pretrained_path: "/data/cil/alberto/flow_fluo_sc/experiments/step1_argolight/checkpoints/network-snapshot-57600.pkl" #/leonardo_work/IscrC_GOLD-FM_0/cozzani/flow_fluo/experiments/step1_noisy_tub_shortest/checkpoints/network-snapshot-1200.pkl
+    #pretrained_path: "/leonardo_work/IscrC_GOLD-FM_0/cozzani/flow_fluo_sc/experiments/step1_argo_float/checkpoints/network-snapshot-57600.pkl"
+
+optim:
+  lr: 0.01
+
+
+training:
+  batch_size: 16
+  max_steps: 64000  #${parse_nimg:"2.4Ki"}       # Si ferma a 51.200 patch totali
+  save_every_steps: 16 # ${parse_nimg:"0.4Ki"} # Salva il modello .pt ogni 5.120 patch
+  plot_every_steps: 16 # ${parse_nimg:"0.4Ki"} # Salva le immagini .png ogni 1.024 patch
+  report_every_steps: 16 # ${parse_nimg:"0.4Ki"}
+  resume: False
+  #train: false
+  save_eval_to_file: True
+ 
+
+evaluate:
+  plot_every_steps: 16 #${parse_nimg:"128Ki"}
+  batch_size: 16 #${parse_nimg:"128Ki"}
+  save_eval_to_file: True
+
+exp_name: step1_argolight_nuova_corruption

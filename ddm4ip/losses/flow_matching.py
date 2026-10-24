@@ -9,7 +9,7 @@ from ddm4ip.losses.base import AbstractLoss
 from ddm4ip.losses.utils import create_optimizer
 from ddm4ip.networks.unets import RFNoPrecond
 from ddm4ip.utils import distributed
-from ddm4ip.utils.torch_utils import center
+from ddm4ip.utils.torch_utils import center, normalize
 
 
 def flow_matching_loss(
@@ -19,15 +19,19 @@ def flow_matching_loss(
     conditioning: torch.Tensor | None = None,
     pretrained_net: torch.nn.Module | None = None,
     pretrained_net_factor: float = 1.0,
+    mean = 0.0,
+    std = 1.0,
 ):
-    images = center(images)           # x1
+    #images = normalize(images, mean, std)           # x1
+    images = center(images) 
+    #print(images[0].max())
     noisy = torch.randn_like(images)  # x0
     t = torch.rand([images.shape[0], 1, 1, 1], device=images.device)
     xt = (1 - t) * noisy + t * images
     target_direction = images - noisy
 
     direction = net(xt, t.squeeze(), labels, conditioning=conditioning)
-    loss = torch.mean((direction - target_direction) ** 2)
+    loss = torch.mean((direction - target_direction) ** 2)#*std
     loss_dict = {'flow_matching': loss.detach()}
     if pretrained_net is not None:
         # regularizer to follow what pretrained_net says
@@ -58,6 +62,10 @@ class FlowMatchingLoss(AbstractLoss):
         else:
             self.flow_nn_ddp = self.flow_nn
         self.clean_images = clean_images
+        print(config)
+        
+        self.mean = 0
+        self.std = 1
         loss_cfg = config['loss']
         self.crop_patch_sizes = loss_cfg['crop_patch_sizes']
         self.train_transform = None
@@ -86,7 +94,7 @@ class FlowMatchingLoss(AbstractLoss):
     def __call__(self, trainer, batch: Batch) -> Dict[str, torch.Tensor]:
         dev_batch = batch.cuda()
         self.flow_nn_ddp.train()
-
+       
         target_img, target_lbl, cond = self.get_data_from_batch(dev_batch)
         if self.train_transform is not None:
             cpu_rng_state = torch.get_rng_state()
@@ -98,7 +106,7 @@ class FlowMatchingLoss(AbstractLoss):
                 cond = self.train_transform(cond)
 
         with self.optimizer_step(self.opt, self.lr_scheduler, self.flow_nn_ddp, grad_scaler=self.grad_scaler):
-            loss, loss_dict = flow_matching_loss(self.flow_nn_ddp, target_img, target_lbl, cond, self.pretr_flow_nn, self.pretr_matching_reg)
+            loss, loss_dict = flow_matching_loss(self.flow_nn_ddp, target_img, target_lbl, cond, self.pretr_flow_nn, self.pretr_matching_reg, self.mean, self.std)
             loss = loss / self.n_accum_steps
             self.grad_scaler.scale(loss).backward()
         return {
@@ -110,7 +118,7 @@ class FlowMatchingLoss(AbstractLoss):
         dev_batch = batch.cuda()
         self.flow_nn.eval()
         target_img, target_lbl, cond = self.get_data_from_batch(dev_batch)
-        loss, loss_dict = flow_matching_loss(self.flow_nn, target_img, target_lbl, cond, self.pretr_flow_nn, self.pretr_matching_reg)
+        loss, loss_dict = flow_matching_loss(self.flow_nn, target_img, target_lbl, cond, self.pretr_flow_nn, self.pretr_matching_reg, self.mean, self.std)
         return {
             f"val_loss/{k}": v for k, v in loss_dict.items()
         }

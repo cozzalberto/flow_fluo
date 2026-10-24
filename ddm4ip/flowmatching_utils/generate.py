@@ -6,14 +6,14 @@ import numpy as np
 import torch
 
 from ddm4ip.utils import distributed
-from ddm4ip.utils.torch_utils import uncenter
-
+from ddm4ip.utils.torch_utils import uncenter, unnormalize
+import random
 
 class HeunSample(abc.ABC):
     def __init__(self, num_steps):
         self.num_steps = num_steps
 
-    def sample(self, noise, labels=None, dtype=torch.float32, conditioning=None, return_trajectory=False):
+    def sample(self, noise, mean, std, labels=None, dtype=torch.float32, conditioning=None, return_trajectory=False):
         device = noise.device
         traj: List[torch.Tensor] = []
         t_steps = self.get_time_steps(dtype, device)
@@ -34,6 +34,7 @@ class HeunSample(abc.ABC):
                 traj.append(uncenter(x_next))
         if return_trajectory:
             return traj[-1], traj
+        #return unnormalize(x_next, mean, std) #uncenter(x_next)
         return uncenter(x_next)
 
     @abc.abstractmethod
@@ -76,6 +77,8 @@ class ImageGenerationOutput:
 
 
 def imggen(
+    mean,
+    std,
     net,
     img_size: tuple[int, int, int],
     label_dim: int = 0,
@@ -89,11 +92,12 @@ def imggen(
     **sampler_kwargs
 ):
     sampler = FlowSample(net=net, **sampler_kwargs)
-
+    #seeds=range(42,43)
+    seeds = range(42,42+batch_size)
     # Divide seeds into batches.
     num_batches = max((len(seeds) - 1) // (batch_size * distributed.get_world_size()) + 1, 1) * distributed.get_world_size()
     rank_batches = np.array_split(np.arange(len(seeds)), num_batches)[distributed.get_local_rank()::distributed.get_world_size()]
-
+       #messo per generare roba diversa
     # Return an iterable over the batches.
     class ImageIterable:
         def __len__(self):
@@ -102,7 +106,9 @@ def imggen(
         def __iter__(self):
             # Loop over batches.
             for batch_idx, indices in enumerate(rank_batches):
-                batch_seeds = [seeds[idx] for idx in indices]
+                #batch_seeds = [seeds[idx] for idx in indices]
+                batch_seeds=[random.randint(1,5000)]
+                print(f"seed:{batch_seeds}")
                 batch_conditioning = None
                 if conditioning is not None:
                     batch_conditioning = torch.stack([conditioning[idx] for idx in indices], 0)
@@ -126,6 +132,8 @@ def imggen(
                     # Generate images.
                     images = sampler.sample(
                         noise=noise,
+                        mean=mean,
+                        std= std,
                         labels=labels,
                         dtype=dtype,
                         conditioning=batch_conditioning,

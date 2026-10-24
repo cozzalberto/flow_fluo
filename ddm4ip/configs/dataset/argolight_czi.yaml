@@ -1,0 +1,16 @@
+defaults:
+ - degradation: no_degradation
+ - noise: no_noise       # Nessun rumore aggiunto al volo, le immagini sono già sporche
+
+name: volume # Usa 'folder' se invece usi una cartella normale
+train_path: datasets/S01A09_grid_argolight_SRRF_488_100x_1518Zeiss_Signal4000_86fps.czi
+test_path: datasets/S01A09_grid_argolight_SRRF_488_100x_1518Zeiss_Signal4000_86fps.czi
+M: 2963
+alpha3: 1
+in_channels: 1
+kwidth: 61
+ksigma: 1.42
+alpha: 0.014
+undersampling: 2 
+offset: 1726
+allow_negative_values: True

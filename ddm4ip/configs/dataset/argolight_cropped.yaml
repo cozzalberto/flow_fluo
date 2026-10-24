@@ -1,0 +1,15 @@
+defaults:
+ - degradation: no_degradation 
+ - noise: no_noise       # Nessun rumore aggiunto al volo, le immagini sono già sporche
+
+name: zip # Usa 'folder' se invece usi una cartella normale
+train_path: datasets/corrupt.zip
+test_path: datasets/corrupt.zip 
+M: 27.72173500061035
+in_channels: 1
+kwidth: 61 
+ksigma: 7.93
+alpha: 12 
+alpha2: 1
+undersampling: 6
+double_poisson: True

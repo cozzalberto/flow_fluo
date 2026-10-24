@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.utils.data
 import torchvision.transforms.v2.functional as TF
+import torch.nn.functional as F
 import cv2
 
 
@@ -18,6 +19,11 @@ def center(img: FT, max_val: float = 1.0) -> FT:
     # [0, max_val] -> [-max_val, max_val]
     return img * 2 - max_val
 
+def normalize(img: FT, mean, std) -> FT:
+    return (img-mean)/std
+
+def unnormalize(img:FT, mean, std) -> FT:
+    return img*std + mean
 
 def uncenter(img: FT, max_val: float = 1.0) -> FT:
     # [-max_val, max_val] -> [0, max_val]
@@ -123,7 +129,7 @@ class InfiniteSampler(torch.utils.data.Sampler):
         assert num_replicas > 0
         assert 0 <= rank < num_replicas
         warnings.filterwarnings('ignore', '`data_source` argument is not used and will be removed')
-        super().__init__(dataset)
+        super().__init__()
         self.dataset_size = len(dataset)
         self.start_idx = start_idx + rank
         self.stride = num_replicas
@@ -175,6 +181,26 @@ def pad_valid(img: torch.Tensor, kernel_size: int | tuple[int, int]) -> torch.Te
         math.ceil((kernel_size[0] + 1) / 2 - 1), math.floor((kernel_size[0] + 1) / 2 - 1),
     )
     return torch.nn.functional.pad(img, pad, mode="constant", value=0)
+
+def pad_image(img: torch.Tensor, desired_res: int | tuple[int,int]):
+    if isinstance(desired_res, int):
+            desired_res = (desired_res, desired_res)
+    H, W = img.shape[-2:]
+    h_pad = (desired_res[0] - H) / 2
+    w_pad = (desired_res[1] -W) / 2
+    pad = (
+        math.ceil(w_pad), math.floor(w_pad), math.ceil(h_pad), math.floor(h_pad)
+
+    )
+    return torch.nn.functional.pad(img, pad, value=0)
+
+def unpad_image(img: torch.Tensor, desired_res: int | tuple[int,int]):
+    if isinstance(desired_res, int):
+                desired_res = (desired_res, desired_res)
+    H, W = img.shape[-2:]
+    h_crop =( H - desired_res[0])/2
+    w_crop = (W -desired_res[1])/2
+    return img[:,:,math.ceil(h_crop):H-math.floor(h_crop), math.ceil(w_crop):W-math.floor(w_crop)]
 
 
 def pad_kernel(kernel: torch.Tensor, kernel_size: int | Tuple[int, int]) -> torch.Tensor:

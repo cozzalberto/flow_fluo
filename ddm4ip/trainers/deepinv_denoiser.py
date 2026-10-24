@@ -129,7 +129,10 @@ class DeepinvDenoiserTrainer(BaseTrainer):
 
     def init_deep_prior(self, network: str, device, **kwargs):
         if network.lower() == "drunet":
-            model = dinv.models.DRUNet(pretrained="download").to(device=device)
+            local_weights_path = "/leonardo_work/IscrC_GOLD-FM_0/cozzani/ddm4ip/torch_cache/hub/checkpoints/drunet_deepinv_color_finetune_22k.pth"
+            
+            # Passa il percorso invece di "download"
+            model = dinv.models.DRUNet(pretrained=local_weights_path).to(device=device)
             distributed.print0("Initialized DRUNet prior")
         elif network.lower() == "diffunet":
             large_model = kwargs.get("large_model", False)
@@ -245,7 +248,17 @@ class DeepinvDenoiserTrainer(BaseTrainer):
             # The noise-level is assumed to be known, hence we just load the true
             # value from the dataset
             noise_level = test_dset.noise_level
-        return noise_level.item() if isinstance(noise_level, torch.Tensor) else noise_level
+
+        valore_finale = noise_level.item() if isinstance(noise_level, torch.Tensor) else noise_level
+        
+        # Se è zero (o meno), lo forziamo a 0.01 per non far esplodere la matematica!
+        if valore_finale <= 0:
+            valore_finale = 0.01
+            print("Forzato noise_level a 0.01 per evitare la divisione per zero!")
+            
+        return valore_finale
+        # --- FINE MAGIA ---
+       # return noise_level.item() if isinstance(noise_level, torch.Tensor) else noise_level
 
     def init_loss(self, cfg, models) -> DeepInvLoss:
         return DeepInvLoss(

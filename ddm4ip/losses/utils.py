@@ -35,6 +35,10 @@ def create_optimizer(config, *parameters):
             lr_scheduler = MultiStepLR(optim, milestones=[400000, 800000], gamma=100)
     return optim, lr_scheduler
 
+def initialize_x_and_b(init_x, init_b):
+    x = torch.nn.Parameters(init_x)
+    b = torch.nn.Parameters(init_b)
+    return x, b
 
 def learning_rate_schedule(cur_step, batch_size, ref_nimg=70e6, rampup_nimg=10e6):
     mul = 1.0

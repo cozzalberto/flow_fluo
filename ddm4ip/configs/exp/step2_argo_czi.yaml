@@ -1,0 +1,56 @@
+# @package _global_
+
+defaults:
+ - /models@models.pretrained_flow: xxxs_flow_128
+ - /models@models.kernel: direct_kernel
+ - /loss@loss.aux: flow_matching
+ - override /training: default
+ - override /dataset: argolight_czi  #non viene toccato (???)
+ - override /generation: flow
+ - override /dataset/degradation: no_degradation
+ - override /dataset/noise: no_noise
+
+models:
+  pretrained_flow:
+          #path: "/leonardo_work/IscrC_GOLD-FM_0/cozzani/flow_fluo/experiments/step1_tubulin_w_pt_51200_xxxs_norm_nocenter/checkpoints/training-state-32000.pt"
+    path: "/data/cil/alberto/flow_fluo_sc/experiments/step1_argo_czi/checkpoints/training-state-115200.pt"
+    img_res: 128  
+dataset:
+  cuda: True
+  space_conditioning: False
+
+optim:
+  aux:
+    lr: 0.00001
+  kernel:
+    lr: 0.0004
+
+loss:
+  name: "di"
+  n_inner_steps: 1
+  n_accum_steps: 1
+  sparse_reg: 0.0
+  center_reg: 0.0
+  sum_to_one_reg: 0.0
+  kernel_path: ""
+  noise_level: 100
+  lambda1: 0.5
+  lambda1_tv: 0.01
+  lambda2: 30
+  scaling_info_pth: ""
+ 
+
+noise_level: 100
+
+
+training:
+  batch_size: 32
+  max_val_batches: 1
+  num_workers: 4
+  max_steps: 128000 #${parse_nimg:"16Ki"}
+  save_every_steps: 25600 #${parse_nimg:"16Ki"}
+  plot_every_steps: 25600 #${parse_nimg:"16Ki"}
+  report_every_steps: 25600 #${parse_nimg:"16Ki"}
+
+exp_name: "argoczi_l1_${loss.lambda1}_l2_${loss.lambda2}_ltv_${loss.lambda1_tv}_${training.max_steps}"
+

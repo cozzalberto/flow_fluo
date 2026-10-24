@@ -3,6 +3,7 @@ import deepinv
 import scipy
 import scipy.io
 import torch
+from deepinv.physics import BlurFFT
 
 from ddm4ip.utils.torch_utils import pad_kernel
 
@@ -20,6 +21,8 @@ def init_noise(noise_cfg):
     noise_kind = noise_cfg["kind"]
     if noise_kind == "gaussian":
         noise_model = GaussianNoise(sigma=noise_cfg["std"])
+    if noise_kind == "poissongaussian":
+        noise_model = GaussianNoise(sigma=noise_cfg["std"])
     elif noise_kind == "none":
         noise_model = None
     else:
@@ -30,14 +33,24 @@ def init_noise(noise_cfg):
 def load_filter_from_file(path, kernel_size: int | None):
     path = Path(path)
     if path.suffix == ".mat":
-        kernel = scipy.io.loadmat(path)["Kernel"]
+        kernel = scipy.io.loadmat(path)["psf"]
         kernel = torch.from_numpy(kernel).float()
-        kernel = kernel[None, None, ...]
+        if kernel.dim()!=4:
+            kernel = kernel[None, None, ...]
     else:
         raise NotImplementedError("Only mat files are supported")
     if kernel_size is not None:
         kernel = pad_kernel(kernel, kernel_size)
+    print('ottimale')
     return kernel
+
+def instantiate_single_kernel_justpath(kernel_path):
+        filter = load_filter_from_file(kernel_path)
+        print('ottimo')
+        return BlurFFT(
+            img_size = (1, 1, 256, 256), #ADATTA!!!
+            filter=filter,
+        )
 
 
 def instantiate_single_kernel(pert_cfg, noise_model):
@@ -53,7 +66,17 @@ def instantiate_single_kernel(pert_cfg, noise_model):
             padding="replicate",
             noise_model=noise_model
         )
-    elif pert_kind == "gaussian_downsampling":
+    elif pert_kind == 'gaussian_file':
+        from degradations.blur import Blur
+        filter = load_filter_from_file(pert_cfg["kernel_path"], kernel_size=pert_cfg.get("kernel_size", None))
+        print('ottimo')
+        return BlurFFT(
+            img_size = (1, 1, 256, 256), #ADATTA!!!
+            filter=filter,
+        )
+
+    elif pert_kind == "gaussian_downsampling":                  #forse può fare al caso tuo!!!! però devi aggiungere back ecc.... in più credo che lui prenda una foto e applichi rumore e stop. a te serve mult
+                                                                 # che a partire da una foto si creino multipli esempi
         from degradations.downsampling import Downsampling
         filter = deepinv.physics.blur.gaussian_blur(
             sigma=pert_cfg['kernel_std'],
@@ -66,7 +89,7 @@ def instantiate_single_kernel(pert_cfg, noise_model):
             padding=pert_cfg["padding"],
             noise_model=noise_model
         )
-    elif pert_kind == "file_downsampling":
+    elif pert_kind == "file_downsampling":                     #o forse ancora meglio
         from degradations.downsampling import Downsampling
         filter = load_filter_from_file(pert_cfg["kernel_path"], kernel_size=pert_cfg.get("kernel_size", None))
         return Downsampling(

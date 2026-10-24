@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from ddm4ip.utils import distributed, persistence
 from ddm4ip.utils.torch_utils import center
-
+from ddm4ip.utils.torch_utils import pad_image, unpad_image
 #----------------------------------------------------------------------------
 # Cached construction of constant tensors. Avoids CPU=>GPU copy when the
 # same constant is used multiple times.
@@ -247,7 +247,7 @@ class Block(torch.nn.Module):
 @persistence.persistent_class
 class UNet(torch.nn.Module):
     def __init__(self,
-        img_resolution,                     # Image resolution.
+        img_resolution,                     # Image resolution: int (square) or (H, W) tuple/list for rectangular images.
         img_channels,                       # Image channels.
         label_dim,                          # Class label dimensionality. 0 = unconditional.
         model_channels      = 192,          # Base multiplier for the number of channels.
@@ -268,7 +268,12 @@ class UNet(torch.nn.Module):
         self.label_balance = label_balance
         self.concat_balance = concat_balance
         self.out_gain = torch.nn.Parameter(torch.zeros([]))
+        if isinstance(img_resolution, (tuple, list)):
+            res_h, res_w = img_resolution
+        else:
+            res_h = res_w = img_resolution
         self.img_resolution = img_resolution
+        self.img_res_hw = (res_h, res_w)
         self.img_channels = img_channels
 
         # Embedding.
@@ -279,32 +284,36 @@ class UNet(torch.nn.Module):
         self.enc = torch.nn.ModuleDict()
         cout = img_channels + 1
         for level, channels in enumerate(cblock):
-            res = img_resolution >> level
+            lvl_h, lvl_w = res_h >> level, res_w >> level
+            res = f'{lvl_h}x{lvl_w}'
+            attn = (lvl_h in attn_resolutions) or (lvl_w in attn_resolutions)
             if level == 0:
                 cin = cout
                 cout = channels
-                self.enc[f'{res}x{res}_conv'] = MPConv(cin, cout, kernel=[3,3])
+                self.enc[f'{res}_conv'] = MPConv(cin, cout, kernel=[3,3])
             else:
-                self.enc[f'{res}x{res}_down'] = Block(cout, cout, cemb, flavor='enc', resample_mode='down', **block_kwargs)
+                self.enc[f'{res}_down'] = Block(cout, cout, cemb, flavor='enc', resample_mode='down', **block_kwargs)
             for idx in range(num_blocks):
                 cin = cout
                 cout = channels
-                self.enc[f'{res}x{res}_block{idx}'] = Block(cin, cout, cemb, flavor='enc', attention=(res in attn_resolutions), **block_kwargs)
+                self.enc[f'{res}_block{idx}'] = Block(cin, cout, cemb, flavor='enc', attention=attn, **block_kwargs)
 
         # Decoder.
         self.dec = torch.nn.ModuleDict()
         skips = [block.out_channels for block in self.enc.values()]
         for level, channels in reversed(list(enumerate(cblock))):
-            res = img_resolution >> level
+            lvl_h, lvl_w = res_h >> level, res_w >> level
+            res = f'{lvl_h}x{lvl_w}'
+            attn = (lvl_h in attn_resolutions) or (lvl_w in attn_resolutions)
             if level == len(cblock) - 1:
-                self.dec[f'{res}x{res}_in0'] = Block(cout, cout, cemb, flavor='dec', attention=True, **block_kwargs)
-                self.dec[f'{res}x{res}_in1'] = Block(cout, cout, cemb, flavor='dec', **block_kwargs)
+                self.dec[f'{res}_in0'] = Block(cout, cout, cemb, flavor='dec', attention=True, **block_kwargs)
+                self.dec[f'{res}_in1'] = Block(cout, cout, cemb, flavor='dec', **block_kwargs)
             else:
-                self.dec[f'{res}x{res}_up'] = Block(cout, cout, cemb, flavor='dec', resample_mode='up', **block_kwargs)
+                self.dec[f'{res}_up'] = Block(cout, cout, cemb, flavor='dec', resample_mode='up', **block_kwargs)
             for idx in range(num_blocks + 1):
                 cin = cout + skips.pop()
                 cout = channels
-                self.dec[f'{res}x{res}_block{idx}'] = Block(cin, cout, cemb, flavor='dec', attention=(res in attn_resolutions), **block_kwargs)
+                self.dec[f'{res}_block{idx}'] = Block(cin, cout, cemb, flavor='dec', attention=attn, **block_kwargs)
         if out_channels is None:
             out_channels = img_channels
         self.out_conv = MPConv(cout, out_channels, kernel=[3,3])
@@ -321,7 +330,8 @@ class UNet(torch.nn.Module):
         unexpected_keys,
         error_msgs,
     ):
-        sd_key = f"{prefix}enc.{self.img_resolution}x{self.img_resolution}_conv.weight"
+        res_h, res_w = self.img_res_hw
+        sd_key = f"{prefix}enc.{res_h}x{res_w}_conv.weight"
         sd_img_channels = state_dict[sd_key].shape[1] - 1
         if self.img_channels == sd_img_channels:
             pass
@@ -445,8 +455,9 @@ class RFNoPrecond(torch.nn.Module):
         assert use_logvar is False
         if isinstance(img_resolution, (tuple, list)):
             assert len(img_resolution) == 2, f"Found invalid resolution {img_resolution}"
-            assert img_resolution[0] == img_resolution[1], f"Found invalid resolution {img_resolution}"
-            img_resolution = img_resolution[0]
+            # Rectangular resolutions are supported: each spatial dimension
+            # just needs to stay divisible by 2**(len(channel_mult) - 1),
+            # i.e. by 2 at every downsampling level of the U-Net.
         self.img_resolution = img_resolution
         self.img_channels = img_channels
         self.cond_channels = cond_channels
@@ -489,13 +500,16 @@ class RFNoPrecond(torch.nn.Module):
             conditioning = center(conditioning) # CAREFUL! Expectes conditioning between 0, 1
             x = torch.cat([x, conditioning], dim=-3)
         x_in = (x).to(dtype)
+        orig_shape = x_in.shape[-2:]
+        if orig_shape != self.img_resolution and orig_shape != (self.img_resolution, self.img_resolution):
+            x_in = pad_image(x_in, self.img_resolution)
         F_x = self.unet(x_in, c_noise, class_labels, **unet_kwargs)
         if conditioning is not None:
             F_x = F_x[:, :self.img_channels]
         v_x =  F_x.to(torch.float32)
-
-        return v_x
-
+        return unpad_image(v_x, orig_shape) if orig_shape != self.img_resolution and orig_shape != (self.img_resolution, self.img_resolution) else v_x
+      
+        
     def velocity(self, x, sigma, class_labels=None, force_fp32=False, **unet_kwargs):
         return self.forward(x, sigma, class_labels, force_fp32, **unet_kwargs)
 
@@ -519,7 +533,7 @@ def init_unet_with_defaults(cfg, img_size: tuple[int, int, int], cond_ch: int, l
     kind = cfg.get("kind", "flow")
     if kind == "flow":
         return RFNoPrecond(
-            img_resolution=cfg.get("img_res", img_size[1:]),
+            img_resolution=cfg.get("img_res", img_size[1:]),   #IMPORTANTE: deve essere la risoluzione richiesta dal modello
             img_channels=img_size[0],
             cond_channels=cond_ch,
             label_dim=label_dim,

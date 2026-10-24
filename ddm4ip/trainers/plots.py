@@ -8,17 +8,52 @@ from torchvision.utils import make_grid
 import torchvision.transforms.v2.functional as TF
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
-
 from ddm4ip.data.base import Batch, DatasetType
 from ddm4ip.data.utils import get_space_varying_patches
 from ddm4ip.flowmatching_utils.generate import imggen
-from ddm4ip.losses.di_y import DiffInstructOnY
+from ddm4ip.losses.di_Y import DiffInstructOnY
 from ddm4ip.utils import distributed
 from ddm4ip.utils.metrics import calc_psnr
-from ddm4ip.utils.torch_utils import equate_kernel_shapes, get_center_kernel
+from ddm4ip.utils.torch_utils import equate_kernel_shapes, get_center_kernel, uncenter
 
 
-def imshow_with_cbar(fig, ax: matplotlib.axes.Axes, img, axis_off=True, cmap='viridis', vmin=None, vmax=None):
+
+def tensor_grid_to_fig_with_cbar(grid_tensor: torch.Tensor, cmap='hot') -> plt.Figure:
+    """
+    grid_tensor: (C, H, W) from make_grid
+    If grayscale (C=1 or C=3 with identical channels), uses cmap + colorbar.
+    """
+    img = grid_tensor.cpu().float()
+
+    # make_grid outputs 3 channels even for grayscale — collapse if uniform
+    if (img[0] == img[1]).all() and (img[0] == img[2]).all():
+        img = img[0]  # (H, W)
+        fig, ax = plt.subplots(1, 1, figsize=(16, 4))
+        im = ax.imshow(img.numpy(), cmap=cmap, vmin=img.min(), vmax=img.max())
+        #fig.colorbar(im, ax=ax, shrink=0.8, label='intensity')
+        fig.colorbar(im,ax=ax, orientation='horizontal')
+    else:
+        # True RGB — colorbar doesn't make sense
+        img = img.permute(1, 2, 0).numpy()
+        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+        ax.imshow(img)
+
+        ax.axis('off')
+    fig.tight_layout()
+    return fig
+
+def imshow_with_cbar_unique(fig, ax: matplotlib.axes.Axes, img, axis_off=True, cmap='hot', vmin=None, vmax=None):
+    img_shape = img.shape
+    if len(img_shape) == 2:
+        num_ch = 1
+    else:
+        num_ch = img_shape[-1]
+    plt_img = ax.imshow(img, aspect='equal', interpolation='none', cmap=cmap, vmin=vmin, vmax=vmax)
+    if axis_off:
+        ax.set_axis_off()
+    return plt_img
+
+def imshow_with_cbar(fig, ax: matplotlib.axes.Axes, img, axis_off=True, cmap='hot', vmin=None, vmax=None):
     # cmap='RdBu', vmin=-1.0, vmax=1.0
     img_shape = img.shape
     if len(img_shape) == 2:
@@ -31,7 +66,8 @@ def imshow_with_cbar(fig, ax: matplotlib.axes.Axes, img, axis_off=True, cmap='vi
     if cbar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('bottom', size='5%', pad=0.05)
-        fig.colorbar(plt_img, cax=cax, orientation='horizontal')
+        cbar_obj = fig.colorbar(plt_img, cax=cax, orientation='horizontal')
+        cbar_obj.ax.tick_params(labelsize=18)
     if axis_off:
         ax.set_axis_off()
 
@@ -62,10 +98,11 @@ def plot_3ch_kernels(pred_filters: torch.Tensor, title: str = ""):
 Plot generated with diffusion
 """
 @torch.no_grad()
-def plot_imggen(config, flow_nn, batch: Batch, img_size: tuple[int, int, int], dset: DatasetType, device) -> torch.Tensor | None:
+def plot_imggen(config, flow_nn, batch: Batch, img_size: tuple[int, int, int], dset: DatasetType, device, mean, std, M) -> torch.Tensor | None:
     if "generation" not in config:
+        print("ciao")
         return None
-
+    offset = config['dataset'].get('offset', 0) 
     batch_size = config['training']['batch_size']
     is_space_varying = getattr(dset, "space_conditioning", False) or getattr(dset, "random_space_conditioning", False)
     if is_space_varying:
@@ -80,9 +117,11 @@ def plot_imggen(config, flow_nn, batch: Batch, img_size: tuple[int, int, int], d
         conditioning = batch.corrupt_conditioning[:num_img_for_sample].to(device) if batch.corrupt_conditioning is not None else None
         nrow = int(math.sqrt(num_img_for_sample))
         if conditioning is not None and (conditioning.shape[-2] != img_size[-2] or conditioning.shape[-1] != img_size[-1]):
-            conditioning = TF.center_crop(conditioning, [img_size[-2], img_size[-1]])
-
+            print(conditioning)
+            conditioning = TF.center_crop(conditioning, [img_size[-2], img_size[-1]]) 
     image_iter = imggen(
+        mean,
+        std,
         net=flow_nn,
         img_size=img_size,
         label_dim=dset.label_dim,
@@ -101,7 +140,9 @@ def plot_imggen(config, flow_nn, batch: Batch, img_size: tuple[int, int, int], d
     if torch.distributed.is_initialized():
         gen_imgs = torch.cat([img.cpu() for img in distributed._simple_gather_all_tensors(gen_imgs, None, distributed.get_world_size())], dim=0)
     image_grid = make_grid(
-        gen_imgs.clamp_(0, 1), nrow=nrow, padding=0
+#        gen_imgs.clamp_(0, 1), nrow=nrow, padding=0
+         M*(gen_imgs) + offset, nrow=nrow, padding=0
+
     )
     return image_grid
 
@@ -337,7 +378,73 @@ def plot_implicit_kernels(batch: Batch, kernel_nn, num_imgs: int = 16, is_diy: b
 
     fig.tight_layout()
     return fig
+    
+def plot_xb(batch, x, b, physics, num_imgs: int = 16, M=489.204834402):
+    batch_dev = batch[:num_imgs].cuda()
+    if batch_dev.clean is None or batch_dev.corrupt is None or batch_dev.noise_level is None:
+        return None
 
+    corrupt_true = batch_dev.clean
+    corrupt_pred, eps_noise, out_pre_relu = physics(x, b)
+    title = r"physics(x,b)"
+
+    TITLE_FONTSIZE = 20
+    CBAR_FONTSIZE = 17
+
+    fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(20, 4))
+
+    images_data = [M*x[0],M*b[0],M*corrupt_pred[0],M* corrupt_true[0]]
+    vmin = min(img.min() for img in images_data)
+    vmax = max(img.max() for img in images_data)
+
+    im = None
+    titles = ["obtained x", "obtained b", "corrupt pred", "corrupt true"]
+    for i, (img, t) in enumerate(zip(images_data, titles)):
+        im = ax[i].imshow(img.detach().cpu().squeeze().numpy(), aspect='equal', interpolation='none', cmap='hot', vmin=vmin, vmax=vmax)
+        ax[i].set_title(t, fontsize=TITLE_FONTSIZE)
+        ax[i].set_axis_off()
+
+
+    fig.subplots_adjust(bottom=0.2)
+    cbar_ax = fig.add_axes([0.05, 0.08, 0.9, 0.04])
+    cbar = fig.colorbar(im, cax=cbar_ax, orientation='horizontal')
+    cbar.ax.tick_params(labelsize=CBAR_FONTSIZE)  # tick labels
+    cbar.set_label('intensity', fontsize=CBAR_FONTSIZE)  # optional axis label — remove if unwanted
+
+    return fig    
+
+def plot_xb_p_cbars(config, batch, x, b, physics, num_imgs: int = 16, M= 26.25):
+    offset = config["dataset"].get("offset",0)
+    batch_dev = batch[:num_imgs].cuda()
+    if batch_dev.clean is None or batch_dev.corrupt is None or batch_dev.noise_level is None:
+        return None
+    corrupt_true, clean_lbl = M*batch_dev.clean + offset, r"$y$"
+    labels = batch_dev if batch_dev.clean_label is not None else None
+    y1, eps_noise, out_pre_relu = physics(x,b)   #uncenter????
+    corrupt_pred = M*y1 + offset
+    title = r"physics(x,b)"
+    batch_size = corrupt_true.shape[0]
+
+    fig, ax = plt.subplots(ncols=4, nrows=1, figsize=(12*4,16))
+
+    imshow_with_cbar(fig, ax[0], M*x[0].detach().cpu().squeeze().numpy())
+    ax[0].set_title("obtained x", fontsize=25)
+
+    imshow_with_cbar(fig, ax[1], M*b[0].detach().cpu().squeeze().numpy())
+    ax[1].set_title("obtained b", fontsize =25)
+    print(f"shape corrupt pred: {corrupt_pred.shape}")
+    print(f"shape max and min pred: {corrupt_pred.min()} {corrupt_pred.max()}")
+    corrupt_prednp= corrupt_pred[0].detach().cpu().squeeze().numpy()
+    print(np.shape(corrupt_prednp))
+    #corrupt_prednorm = (corrupt_prednp - corrupt_prednp.min()) / (corrupt_prednp.max() - corrupt_prednp.min())
+    imshow_with_cbar(fig, ax[2], corrupt_prednp)
+    ax[2].set_title("corrupt pred", fontsize = 25)
+
+    corrupt_first = corrupt_true[0].detach().cpu().squeeze().numpy()
+    imshow_with_cbar(fig, ax[3], corrupt_true[0].detach().cpu().squeeze().numpy())
+    ax[3].set_title("corrupt true", fontsize=20)
+    fig.tight_layout()
+    return fig
 
 """
 Plot conditioning distribution

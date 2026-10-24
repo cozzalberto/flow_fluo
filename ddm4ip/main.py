@@ -3,7 +3,7 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 
 from ddm4ip.trainers.deepinv_denoiser import DeepinvDenoiserTrainer
-from ddm4ip.trainers.diffinstruct_learn_op import DiffinstructOpTrainer
+from ddm4ip.trainers.diffinstruct_learn_x_b import DiffinstructOpTrainer
 from ddm4ip.trainers.finetune_flow import FinetuneFlowTrainer
 from ddm4ip.utils import distributed
 
@@ -29,8 +29,8 @@ def my_app(cfg : DictConfig) -> None:
     # be (maybe just removing the `set_start_method` could be enough). This
     # has been observed on JZ even when running on single GPU, so has been
     # disabled.
-
     torch.multiprocessing.set_start_method('forkserver')
+
     try:
         distributed.init()
 
@@ -59,4 +59,5 @@ def my_app(cfg : DictConfig) -> None:
 
 
 if __name__ == "__main__":
+    
     my_app()

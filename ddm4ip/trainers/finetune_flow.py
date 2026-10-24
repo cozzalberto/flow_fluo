@@ -5,12 +5,12 @@ import pickle
 from omegaconf import DictConfig
 import torch
 import torch.utils.data
-
+import matplotlib.pyplot as plt
 from ddm4ip.data.base import Batch, Datasplit, init_dataset
 from ddm4ip.losses.flow_matching import FlowMatchingLoss
 from ddm4ip.networks.unets import init_unet_with_defaults
 from ddm4ip.trainers.base import BaseTrainer, init_trts_dataloaders
-from ddm4ip.trainers.plots import plot_imggen
+from ddm4ip.trainers.plots import plot_imggen, tensor_grid_to_fig_with_cbar
 from ddm4ip.utils import distributed
 from ddm4ip.utils.easy_dict import print_module_summary
 from ddm4ip.utils.phema import PowerFunctionEMA
@@ -33,6 +33,11 @@ class FinetuneFlowTrainer(BaseTrainer):
             cfg, dsets, start_idx=self.start_global_step, is_infinite=self.is_training
         )
 
+    def init_x_and_b(self, batch, device):
+        x = None
+        b = None
+        return x, b
+    
     def init_models(self, cfg, dsets, device): # type: ignore
         dataset = dsets[Datasplit.TRAIN]
         assert dataset is not None
@@ -59,9 +64,25 @@ class FinetuneFlowTrainer(BaseTrainer):
             elif flow_cfg["pretrained_path"].endswith(".pkl"):
                 with open(flow_cfg["pretrained_path"], "rb") as fh:
                     in_pkl_data = pickle.load(fh)
-                    prtr_ckpt = in_pkl_data['ema'].to(torch.float32)
-                    flow_nn.load_state_dict(prtr_ckpt.state_dict(), strict=False)
-                    del prtr_ckpt
+
+                    if 'flow_nn' in in_pkl_data:
+                        print(" Found full model in checkpoint (flow_nn)")
+                        prtr_ckpt = in_pkl_data['flow_nn'].state_dict()
+
+                    elif 'ema' in in_pkl_data:
+                        prtr_ckpt = in_pkl_data['ema']
+
+                    elif 'model' in in_pkl_data:
+                        prtr_ckpt = in_pkl_data['model']
+
+                    elif 'state_dict' in in_pkl_data:
+                        prtr_ckpt = in_pkl_data['state_dict']
+
+                    else:
+                        raise ValueError(f"Unknown checkpoint keys: {in_pkl_data.keys()}")
+
+                flow_nn.load_state_dict(prtr_ckpt, strict=False)
+                del prtr_ckpt
             else:
                 raise RuntimeError(
                     f"Unrecognized file extension for '{flow_cfg['pretrained_path']}'"
@@ -93,10 +114,10 @@ class FinetuneFlowTrainer(BaseTrainer):
             "flow_nn": flow_nn
         }
 
-    def init_loss(self, cfg, models):
+    def init_loss(self, cfg, models, x = None, b = None):
         if cfg['loss']['name'] == 'flow_matching':
             # flow match on the y (corrupted images)
-            loss = FlowMatchingLoss(cfg, clean_images=False, **models)
+            loss = FlowMatchingLoss(cfg, clean_images=False, **models)   #ma questo False?
         else:
             raise ValueError(f"Loss of type '{cfg['loss']['name']}' invalid.")
         return loss
@@ -126,6 +147,7 @@ class FinetuneFlowTrainer(BaseTrainer):
         elif self.flow_nn_ema is not None:
             raise RuntimeError("Current model expects EMA data but checkpoint does not contain any.")
 
+
     def make_plots(self, cfg, dsets, dloaders, models, tb_writer, global_step):
         if self.plot_batch is None:
             # This ensures we always use the same batch for plotting.
@@ -139,9 +161,14 @@ class FinetuneFlowTrainer(BaseTrainer):
 
         dset = dsets[Datasplit.TEST]
         assert dset is not None
-        p1 = plot_imggen(cfg, flow_nn, self.plot_batch, dset.corrupt_img_size, dset, self.device)
+
+        mean = 0
+        std = 1
+
+        p1 = plot_imggen(cfg, flow_nn, self.plot_batch, dset.corrupt_img_size, dset, self.device, mean, std, cfg["dataset"]["M"])
         if p1 is not None and distributed.get_rank() == 0:
-            self.log_image(p1, 'diffusion/generated', tb_writer)
+            fig = tensor_grid_to_fig_with_cbar(p1, cmap='hot')
+            self.log_image(fig, 'diffusion/generated', tb_writer) #prima era p1
 
 
 @torch.no_grad()
