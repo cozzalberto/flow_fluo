@@ -78,20 +78,21 @@ class DiffinstructOpTrainer(BaseTrainer):
         alpha3 = cfg["dataset"].get("alpha3",1)
         allow_negative_vals = cfg["dataset"].get("allow_negative_values", False)
         ext = cfg["dataset"].get("extended_domain",False)
-        if cfg["dataset"]["ksigma"] is None :
-            if cfg["dataset"]["px"] is None :
+        ksigma = cfg["dataset"].get("ksigma")
+        if ksigma is None :
+            if cfg["dataset"].get("px") is None :
                 raise ValueError("You should provide at least ksigma or \
                                  px / FWHM or px / NA / wavelength to modelize PSF")
-            elif cfg["dataset"]["FWHM"] is None :
-                if cfg["dataset"]["wavelength"] is None or cfg["dataset"]["NA"] is None :
+            elif cfg["dataset"].get("FWHM") is None :
+                if cfg["dataset"].get("wavelength") is None or cfg["dataset"].get("NA") is None :
                     raise ValueError("You should provide at least ksigma or \
                                      px / FWHM or px / NA / wavelength to modelize PSF")
                 cfg["dataset"]["FWHM"] = int(0.51 * cfg["dataset"]["wavelength"] / cfg["dataset"]["NA"])
-        cfg["dataset"]["ksigma"] = cfg["dataset"]["FWHM"] / 2.355 / cfg["dataset"]["px"] * cfg["dataset"]["undersampling"]
+            ksigma = cfg["dataset"]["FWHM"] / 2.355 / cfg["dataset"]["px"] * cfg["dataset"]["undersampling"]
         if ext:
-            physics = Corruption_train_fft_ext(kwidth = cfg["dataset"]["kwidth"], ksigma = cfg["dataset"]["ksigma"], alpha = cfg["dataset"]["alpha"], alpha2 = cfg["dataset"].get("alpha2", 1), alpha3 = alpha3, undersampling = cfg["dataset"]["undersampling"], noise_level=cfg["loss"]["noise_level"], M = cfg["dataset"]["M"], allow_negative_values= allow_negative_vals, circular = True, do_blur = True, double_poisson = cfg["dataset"].get("double_poisson",False),device = device).to(device)
+            physics = Corruption_train_fft_ext(kwidth = cfg["dataset"]["kwidth"], ksigma = ksigma, alpha = cfg["dataset"]["alpha"], alpha2 = cfg["dataset"].get("alpha2", 1), alpha3 = alpha3, undersampling = cfg["dataset"]["undersampling"], noise_level=cfg["loss"]["noise_level"], M = cfg["dataset"]["M"], allow_negative_values= allow_negative_vals, circular = True, do_blur = True, double_poisson = cfg["dataset"].get("double_poisson",False),device = device).to(device)
         else:
-            physics = Corruption_train_fft(kwidth = cfg["dataset"]["kwidth"], ksigma = cfg["dataset"]["ksigma"], alpha = cfg["dataset"]["alpha"], alpha2 = cfg["dataset"].get("alpha2", 1), alpha3 = alpha3, undersampling = cfg["dataset"]["undersampling"], noise_level=cfg["loss"]["noise_level"], M = cfg["dataset"]["M"], allow_negative_values= allow_negative_vals, circular = True, do_blur = True, double_poisson = cfg["dataset"].get("double_poisson",False),device = device).to(device)
+            physics = Corruption_train_fft(kwidth = cfg["dataset"]["kwidth"], ksigma = ksigma, alpha = cfg["dataset"]["alpha"], alpha2 = cfg["dataset"].get("alpha2", 1), alpha3 = alpha3, undersampling = cfg["dataset"]["undersampling"], noise_level=cfg["loss"]["noise_level"], M = cfg["dataset"]["M"], allow_negative_values= allow_negative_vals, circular = True, do_blur = True, double_poisson = cfg["dataset"].get("double_poisson",False),device = device).to(device)
         C, H, W = dataset.clean_img_size
         physics_fake_inputs = [
             torch.zeros([self.batch_size, C, H*cfg["dataset"]["undersampling"], W*cfg["dataset"]["undersampling"]], device=device),
