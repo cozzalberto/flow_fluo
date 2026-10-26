@@ -4,10 +4,11 @@ Fluctuation-based super-resolution techniques are an appealing alternative to si
 The method alternates two steps: a flow matching model first learns the distribution of the acquired data; then, the sample and the background are jointly estimated by minimising a Kullback-Leibler divergence between observed and simulated distributions via regularised proximal gradient steps. On simulated and real Argolight data, the method resolves lines separated by 120 nm, outperforming SACD and eSRRF.
 
 ## Setup & Installation
+ 1. Clone the repository:
 ```bash
 git clone https://github.com/cozzalberto/flow_fluo
 ```
-Install requirements: `pip install -r requirements.txt`
+ 2. Install the requirements: `pip install -r requirements.txt`
 
 ## Step 1
  ```console
