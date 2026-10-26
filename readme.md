@@ -12,20 +12,22 @@ git clone https://github.com/cozzalberto/flow_fluo
  
 ## Reproduce Simulate Argolight Experiment
 
- 1. Download the corrupt.zip dataset from the [drive folder](https://drive.google.com/drive/folders/1IoZNxYp4JLzh4YlPC4hpRju-DMqQYLH-?usp=sharing)
-   * Update the `train_path` key inside `ddm4ip/configs/dataset/argolight_cropped.yaml` to point to the location of the downloaded dataset. 
-   * **Note:** You do not need to unzip the file.
 
-   > **Tip:** A rectangular version `corrupt_rect.zip` of the dataset is also available with image sizes 64 x 256 (instead of 256 x 256). The results in the paper were obtained with the 'square' dataset, but    using the rectangular one will provide similar results in less computational time.
+### 1. Prepare the Dataset
+Download the corrupt.zip dataset from the [drive folder](https://drive.google.com/drive/folders/1IoZNxYp4JLzh4YlPC4hpRju-DMqQYLH-?usp=sharing)
+* Update the `train_path` key inside `ddm4ip/configs/dataset/argolight_cropped.yaml` to point to the location of the downloaded dataset. 
+* **Note:** You do not need to unzip the file.
 
- 2. Reproduce Step1:
+> **Tip:** A rectangular version `corrupt_rect.zip` of the dataset is also available with image sizes 64 x 256 (instead of 256 x 256). The results in the paper were obtained with the 'square' dataset, but    using the rectangular one will provide similar results in less computational time.
+
+### 2. Reproduce Step1 
       ```console
      python ddm4ip/main.py exp=step1_argolight_cropped
      ```
-     *To change hyper-parameters, you can modify the config file `ddm4ip/configs/exp/step1_argolight_cropped.yaml` (or `step1_argolight_rect.yaml` if you are using the rectangular dataset).*
- 3. Reproduce Step 2:
+*To change hyper-parameters, you can modify the config file `ddm4ip/configs/exp/step1_argolight_cropped.yaml` (or `step1_argolight_rect.yaml` if you are using the rectangular dataset).*
+### 3. Reproduce Step 2:
      ```console
      python ddm4ip/main.py exp=step2_argolight_cropped loss.lambda1=0.05 loss.lambda2=40 training.max_step=512000
      ```
-     *To change hyper-parameters, you can modify the config file `ddm4ip/configs/exp/step2_argolight_cropped.yaml` (or `step2_argolight_rect.yaml` if you are using the rectangular dataset).*
+*To change hyper-parameters, you can modify the config file `ddm4ip/configs/exp/step2_argolight_cropped.yaml` (or `step2_argolight_rect.yaml` if you are using the rectangular dataset).*
 
