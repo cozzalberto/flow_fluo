@@ -23,6 +23,6 @@ It's available also a rectangular version of the dataset with image sizes 64 x 2
  3. Reproduce Step 2:
      ```console
      python ddm4ip/main.py exp=step2_argolight_cropped loss.lambda1=0.05 loss.lambda2=40 training.max_step=512000
-   ```
-   If you wanted to change hyper-parameters, you can modify the config file ddm4ip/configs/exp/step2_argolight_cropped.yaml (or step2_argolight_rect.yaml if you want to use the rectangular dataset)
+     ```
+     If you wanted to change hyper-parameters, you can modify the config file ddm4ip/configs/exp/step2_argolight_cropped.yaml (or step2_argolight_rect.yaml if you want to use the rectangular dataset)
 
