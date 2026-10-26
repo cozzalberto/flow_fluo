@@ -21,13 +21,13 @@ Download the corrupt.zip dataset from the [drive folder](https://drive.google.co
 > **Tip:** A rectangular version `corrupt_rect.zip` of the dataset is also available with image sizes 64 x 256 (instead of 256 x 256). The results in the paper were obtained with the 'square' dataset, but    using the rectangular one will provide similar results in less computational time.
 
 ### 2. Reproduce Step1 
-      ```console
-     python ddm4ip/main.py exp=step1_argolight_cropped
-     ```
+```console
+python ddm4ip/main.py exp=step1_argolight_cropped
+```
 *To change hyper-parameters, you can modify the config file `ddm4ip/configs/exp/step1_argolight_cropped.yaml` (or `step1_argolight_rect.yaml` if you are using the rectangular dataset).*
 ### 3. Reproduce Step 2:
-     ```console
-     python ddm4ip/main.py exp=step2_argolight_cropped loss.lambda1=0.05 loss.lambda2=40 training.max_step=512000
-     ```
+```console
+python ddm4ip/main.py exp=step2_argolight_cropped loss.lambda1=0.05 loss.lambda2=40 training.max_step=512000
+```
 *To change hyper-parameters, you can modify the config file `ddm4ip/configs/exp/step2_argolight_cropped.yaml` (or `step2_argolight_rect.yaml` if you are using the rectangular dataset).*
 
