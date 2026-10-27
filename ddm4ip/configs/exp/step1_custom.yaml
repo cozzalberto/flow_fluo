@@ -3,7 +3,7 @@ defaults:
  - /models@models.flow: xxxs_flow_256 # Adjust based on your desired resolution. You can choose between xxs_flow64, xxxs_flowI where I in {32, 64, 96, 128, 256}. I should be equal to your H or W, or near to it
  - override /training: default
  - override /loss: flow_matching
- - override /dataset: custom_dataset  # <--- Change this to match the name of your dataset YAML (without .yaml)
+ - override /dataset: my_custom_dataset  # <--- Change this to match the name of your dataset YAML (without .yaml)
  - override /generation: flow
 
 models:

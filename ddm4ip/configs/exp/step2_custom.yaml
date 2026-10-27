@@ -4,7 +4,7 @@ defaults:
  - /models@models.kernel: direct_kernel
  - /loss@loss.aux: flow_matching
  - override /training: default
- - override /dataset: custom_dataset
+ - override /dataset: my_custom_dataset
  - override /generation: flow
  - override /dataset/degradation: no_degradation
  - override /dataset/noise: no_noise
