@@ -45,8 +45,7 @@ in_channels: 1
 # Super-resolution factor (e.g., 2 means the HR reconstruction will be 2x larger in H and W)
 undersampling: 2    #Required
 
-# Camera Conversion Factor (ADU per electron / gain)
-M: 2963 #Required
+M: 2963 #Required: the maximum pixel intensity value present in your dataset.
 
 # Camera Baseline/Offset/Pedestal. Default: 0 (value to subtract from raw pixel intensities)
 offset: 0 #Optional
