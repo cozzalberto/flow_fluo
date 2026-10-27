@@ -1,0 +1,37 @@
+# @package _global_
+defaults:
+ - /models@models.pretrained_flow: xxxs_flow_256
+ - /models@models.kernel: direct_kernel
+ - /loss@loss.aux: flow_matching
+ - override /training: default
+ - override /dataset: custom_dataset
+ - override /generation: flow
+ - override /dataset/degradation: no_degradation
+ - override /dataset/noise: no_noise
+
+
+# Optimization regularizers for the target optimization (Step 2)
+loss:
+  name: "di"
+  n_inner_steps: 1
+  n_accum_steps: 1
+  noise_level: 1 
+  lambda1: 0.1
+  lambda2: 10
+  noise_level: 5 #additive gaussian noise standard deviation
+  
+optim:
+  aux:
+    lr: 0.00001   #Learning rate of the auxiliary flow matching model
+  kernel:
+    lr: 0.0004    #Learning rate for proximal gradient
+
+training:
+  max_steps: 512000
+  batch_size: 32
+  num_workers: 4
+  save_every_steps: 6400 
+  plot_every_steps: 6400 
+  report_every_steps: 6400
+
+exp_name: step2_custom_"l1_${loss.lambda1}_l2_${loss.lambda2}_${training.max_steps}"

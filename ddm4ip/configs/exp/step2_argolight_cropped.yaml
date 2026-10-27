@@ -14,12 +14,7 @@ models:
   pretrained_flow:
           #path: "/leonardo_work/IscrC_GOLD-FM_0/cozzani/flow_fluo/experiments/step1_tubulin_w_pt_51200_xxxs_norm_nocenter/checkpoints/training-state-32000.pt"
     path: "/data/cil/alberto/flow_fluo_sc/experiments/step1_argolight/checkpoints/training-state-57600.pt" #/leonardo_work/IscrC_GOLD-FM_0/cozzani/flow_fluo/experiments/step1_tubulin_w_pt_51200_xxxs_norm_nocenter/checkpoints/training-state-32000.pt"
-dataset:
-  train_path: "/data/cil/alberto/flow_fluo_sc/datasets/corrupt.zip"
-  degradation:
-    padding: "valid"
-  cuda: True
-  space_conditioning: False
+
 
 optim:
   aux:
@@ -40,10 +35,6 @@ loss:
   lambda2: 10
   scaling_info_pth: ""
  
-
-noise_level: 1 
-
-
 training:
   batch_size: 32
   max_val_batches: 1
