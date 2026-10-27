@@ -43,54 +43,59 @@ test_path: datasets/my_custom_acquisition.tif
 in_channels: 1
 
 # Super-resolution factor (e.g., 2 means the HR reconstruction will be 2x larger in H and W)
-undersampling: 2
+undersampling: 2    #Required
 
 # Camera Conversion Factor (ADU per electron / gain)
-M: 2963
+M: 2963 #Required
 
-# Camera Baseline/Offset (value to subtract from raw pixel intensities)
-offset: 1726
+# Camera Baseline/Offset/Pedestal. Default: 0 (value to subtract from raw pixel intensities)
+offset: 0 #Optional
 
-# Point Spread Function (PSF) size in pixels
+#---------
+#PSF parameters: you should provide at least ksigma or px & FWHM or px & NA & wavelength to model PSF
+#---------
+
+# Point Spread Function (PSF) size in pixels: Required
 kwidth: 61
 
 # PSF standard deviation (Gaussian blur sigma)
 ksigma: 1.42
 
-# ---------------------------------------------------------
-# Generative Model / Loss parameters
-# ---------------------------------------------------------
+#FWHM in nanometers
+FWHM: 198
 
-# Poisson rates parameters
-alpha: 0.014
-alpha2: 1
-alpha3: 1
+#Pixel size in nanometers
+px: 100
+
+#NA Numerical Aperture of the microscope
+NA: 1.4
+
+#Wavelength
+wavelength: 500
+
+# Poisson rates parameters: the physical model contain two Poisson distribution and can be written as
+# y = alpha2* 1/alpha P(alpha (UH* 1/beta* P(beta x) + b )) + eps where UH undersampling+ convolution. alpha3 can be described as but was set to 1 in all our experiments;
+# the inner Poisson is used only if you set double_poisson as True
+ 
+alpha: 0.014      #Required
+beta: 1           #Optional
+alpha2: 1         #Optional
 
 # Set to True if using the specific double-Poisson forward model variant
-double_poisson: False
+double_poisson: False #Optional
 
-# Ensure non-negativity in intermediate steps
-allow_negative_values: True
+# Ensure non-negativity in intermediate steps. Default to False. In case of offset we suggest to set it to True
+allow_negative_values: False   #Optional
 ```
 
-## 3. Running the Pipeline
+## 3. Running the Pipeline 
 
 Once you have created `my_custom_data.yaml`, you can create custom experiment files in `ddm4ip/configs/exp/` (e.g., `step1_my_custom_data.yaml` and `step2_my_custom_data.yaml`). 
 
-Inside those experiment files, make sure to override the dataset:
-
-```yaml
-# Example snippet for step1_my_custom_data.yaml
-defaults:
-  - /models@models.flow: xxxs_flow_128
-  - override /training: default
-  - override /loss: flow_matching
-  - override /dataset: my_custom_data # <--- Points to your new yaml!
-  - override /generation: flow
-```
+You can look at `ddm4ip/configs/exp/step1_custom.yaml` and `ddm4ip/configs/exp/step2_custom.yaml` for reference for step1 and step2 config files, respectively.
 
 Then run the steps normally:
 ```bash
 python ddm4ip/main.py exp=step1_my_custom_data
-python ddm4ip/main.py exp=step2_my_custom_data loss.lambda1=... loss.lambda2=...
+python ddm4ip/main.py exp=step2_my_custom_data
 ```
