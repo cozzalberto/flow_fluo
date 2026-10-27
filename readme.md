@@ -31,3 +31,11 @@ python ddm4ip/main.py exp=step2_argolight_cropped loss.lambda1=0.05 loss.lambda2
 ```
 *To change hyper-parameters, you can modify the config file `ddm4ip/configs/exp/step2_argolight_cropped.yaml` (or `step2_argolight_rect.yaml` if you are using the rectangular dataset).*
 
+## Use your own dataset
+You can use your own dataset with your own dataset. 
+The code supports:
+ 1. A .zip folder containing N `.pt` tensors where N is the number of your samples.
+ 2. A .tif or .tiff file with shape (N,W,H)
+ 3. A .czi file.
+
+**For detailed instructions on how to configure the YAML files for your custom data, please refer to our guide: [CUSTOM_DATASET.md](CUSTOM_DATASET.md).**
