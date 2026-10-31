@@ -15,6 +15,9 @@ To use your data, you need to create a `.yaml` configuration file inside `ddm4ip
 
 This file describes not only where the data is, but also the physical parameters of the acquisition (camera characteristics, PSF, under-sampling factor, etc.) that the forward double-Poisson model needs to work correctly.
 
+The folder [drive folder](https://drive.google.com/drive/folders/1IoZNxYp4JLzh4YlPC4hpRju-DMqQYLH-?usp=sharing) contains a package "analyze_noise" which can be useful to compute some of the parameters required, such as alpha, noise_value (called sigma in the package), M and estimate FWHM and/or ksigma.
+
+
 ### YAML Template
 
 Here is a heavily commented template you can copy and adapt for your dataset:

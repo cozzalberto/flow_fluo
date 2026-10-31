@@ -1,3 +1,6 @@
+# Flow Fluo: Fluctuation-based Fluorescence Super-Resolution
+This repository implement the code for the article: [**Flow Matching for Fluctuation-Based Fluorescence Super-Resolution**](https://arxiv.org/abs/2610.37802).
+
 ## Abstract
 
 Fluctuation-based super-resolution techniques are an appealing alternative to single-molecule and structured-illumination microscopy, as they adapt to standard acquisition settings and exploit the independent stochastic fluctuations of fluorophores across a sequence of frames. However, most existing approaches lack an explicit model of the acquisition process and provide only relative intensity estimates, limiting quantitative analyses. In this work, we combine model-based and generative approaches to exploit the full stochastic information in the sequence, proposing a reconstruction framework built on flow matching and a double-Poisson forward model accounting for blinking, blur, under-sampling and noise.
